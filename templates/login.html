@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login | Culinary AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div id="toastContainer"></div>
+    <div class="container auth-container">
+        <header class="app-header">
+            <h1>Welcome Back!</h1>
+            <p>Log in to generate personalized recipes.</p>
+        </header>
+        <form id="loginForm" class="card auth-form">
+            <h2>Login</h2>
+            <input type="email" id="loginEmail" placeholder="Email Address" required>
+            <input type="password" id="loginPassword" placeholder="Password" required>
+            <button type="submit" class="btn-primary">Login</button>
+            <p class="form-toggle">Don't have an account? <a href="/register">Register here</a></p>
+        </form>
+    </div>
+    <script src="/static/auth.js"></script>
+</body>
+
+</html>

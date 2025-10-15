@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Register | Culinary AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div id="toastContainer"></div>
+    <div class="container auth-container">
+        <header class="app-header">
+            <h1>Create Your Account</h1>
+            <p>Join to get recipes tailored to your taste.</p>
+        </header>
+        <form id="registerForm" class="card auth-form">
+            <h2>Register</h2>
+            <input type="text" id="registerName" placeholder="Full Name" required>
+            <input type="email" id="registerEmail" placeholder="Email Address" required>
+            <input type="password" id="registerPassword" placeholder="Password" required>
+            <select id="dietaryPreference" required>
+                <option value="" disabled selected>Select Dietary Preference...</option>
+                <option value="veg">Vegetarian</option>
+                <option value="non-veg">Non-Vegetarian</option>
+            </select>
+            <button type="submit" class="btn-primary">Create Account</button>
+            <p class="form-toggle">Already have an account? <a href="/login">Login here</a></p>
+        </form>
+    </div>
+    <script src="/static/auth.js"></script>
+</body>
+
+</html>
