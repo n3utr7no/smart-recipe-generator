@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const backendURL = 'http://127.0.0.1:5000/api';
+    // UPDATED: Use a relative URL for the API
+    const backendURL = '/api';
     const authToken = localStorage.getItem('authToken');
 
     if (!authToken) {
@@ -106,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
             <div class="recipe-card" data-recipe-name="${r.name}" data-substitutions='${subsData}'>
-                <img src="${r.image_url || 'https://via.placeholder.com/150'}" alt="${r.name}" class="recipe-card-image">
+                <img src="${r.image_url || 'https://placehold.co/150x150/1a1c1e/a0a0a0?text=No+Image'}" alt="${r.name}" class="recipe-card-image">
                 <div class="recipe-card-content">
                     <h3>${r.name}</h3>
                     <div class="meta">
@@ -171,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      <h2>${recipe.name}</h2>
                      ${metaHTML}
                  </header>
-                 <img src="${recipe.image_url || 'https://via.placeholder.com/800x400'}" alt="${recipe.name}" class="recipe-detail-image">
+                 <img src="${recipe.image_url || 'https://placehold.co/800x400/1a1c1e/a0a0a0?text=No+Image'}" alt="${recipe.name}" class="recipe-detail-image">
                  
                  <div class="ingredients-section">
                      <h3>Ingredients</h3>
@@ -197,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         detailView.querySelector('.close-detail-btn').addEventListener('click', showListView);
     }
 
+    // --- HELPER & FETCH FUNCTIONS ---
     function updateActiveNav(activeButton) {
         document.querySelectorAll('.header-nav .nav-link').forEach(link => {
             link.classList.remove('active');
@@ -471,3 +473,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeApp();
 });
+
