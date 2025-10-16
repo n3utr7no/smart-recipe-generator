@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allIngredients = [];
     let currentUserIngredients = new Set();
     let originalRecipeData = null;
+    let isGeneratedContext = false; // NEW: Tracks if the current view is from a generated search
 
     // --- DOM REFERENCES ---
     const masterDetailContainer = document.getElementById('masterDetailContainer');
@@ -117,9 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderRecipeDetail(recipe, substitutions) {
-        originalRecipeData = {
-            ...recipe
-        };
+        originalRecipeData = { ...recipe };
 
         const servingsHTML = `
             <div class="servings-section">
@@ -156,20 +155,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<li data-original-amount="${amount}">${formattedName}${subNote} <span>${Math.round(amount)}g</span></li>`;
         }).join('');
 
-        const recipeIngredients = Object.keys(recipe.ingredients);
-        const missingIngredients = recipeIngredients.filter(ing => !currentUserIngredients.has(ing) && !Object.values(substitutions).includes(ing));
+        // UPDATED: This whole block is now conditional
         let missingIngredientsHTML = '';
-        if (missingIngredients.length > 0) {
-            const missingList = missingIngredients.map(ingName => {
-                const amount = recipe.ingredients[ingName];
-                const formattedName = ingName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                return `<li>${formattedName} <span>${Math.round(amount)}g</span></li>`;
-            }).join('');
-            missingIngredientsHTML = `
-                <div class="missing-ingredients-section">
-                    <h3>You Will Also Need</h3>
-                    <ul class="ingredients-list">${missingList}</ul>
-                </div>`;
+        if (isGeneratedContext) {
+            const recipeIngredients = Object.keys(recipe.ingredients);
+            const missingIngredients = recipeIngredients.filter(ing => !currentUserIngredients.has(ing) && !Object.values(substitutions).includes(ing));
+            if (missingIngredients.length > 0) {
+                const missingList = missingIngredients.map(ingName => {
+                    const amount = recipe.ingredients[ingName];
+                    const formattedName = ingName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                    return `<li>${formattedName} <span>${Math.round(amount)}g</span></li>`;
+                }).join('');
+                missingIngredientsHTML = `
+                    <div class="missing-ingredients-section">
+                        <h3>You Will Also Need</h3>
+                        <ul class="ingredients-list">${missingList}</ul>
+                    </div>`;
+            }
         }
 
         const nutritionHTML = recipe.nutrition ? Object.entries(recipe.nutrition).map(([key, value]) => {
@@ -277,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- DATA FETCHING & NAVIGATION ---
     async function fetchAndShowSuggestions() {
+        isGeneratedContext = false; // UPDATED: Set context to false
         updateActiveNav(suggestionsBtn);
         resultsWrapper.innerHTML = `<div class="card"><div class="spinner" style="display:block; margin: 80px auto; width: 40px; height: 40px;"></div></div>`;
         showListView();
@@ -303,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchAndShowAllRecipes() {
+        isGeneratedContext = false; // UPDATED: Set context to false
         updateActiveNav(discoverBtn);
         resultsWrapper.innerHTML = `<div class="card"><div class="spinner" style="display:block; margin: 80px auto; width: 40px; height: 40px;"></div></div>`;
         showListView();
@@ -318,6 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchAndShowFavorites() {
+        isGeneratedContext = false; // UPDATED: Set context to false
         updateActiveNav(favoritesBtn);
         resultsWrapper.innerHTML = `<div class="card"><div class="spinner" style="display:block; margin: 80px auto; width: 40px; height: 40px;"></div></div>`;
         showListView();
@@ -358,6 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsWrapper.innerHTML = '';
             return;
         }
+
+        isGeneratedContext = true; // UPDATED: Set context to true for generated recipes
 
         updateActiveNav(homeBtn);
         toggleButtonLoading(generateBtn, true);
