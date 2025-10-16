@@ -1,4 +1,3 @@
-# app/recipes.py
 from flask import Blueprint, request, jsonify
 from .utils import token_required
 from .models import all_ingredients, recipe_store, SUBSTITUTION_MAP, FavoriteRecipe, UserProfile, db
@@ -7,17 +6,6 @@ from clarifai.client.model import Model
 import os
 
 recipes_bp = Blueprint('recipes', __name__)
-
-def to_vector(ingredient_dict):
-    return [ingredient_dict.get(ing, 0.0) for ing in all_ingredients]
-
-def cosine(vec1, vec2):
-    dot_product = sum(x * y for x, y in zip(vec1, vec2))
-    norm_a = math.sqrt(sum(x * x for x in vec1))
-    norm_b = math.sqrt(sum(x * x for x in vec2))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot_product / (norm_a * norm_b)
 
 def calculate_match_score(recipe_ingredients, user_ingredients):
     perfect_matches = 0
@@ -30,16 +18,14 @@ def calculate_match_score(recipe_ingredients, user_ingredients):
         if required_ing in user_ingredients_set:
             perfect_matches += 1
         else:
-            found_substitute = False
             possible_subs = SUBSTITUTION_MAP.get(required_ing, [])
             for sub in possible_subs:
                 if sub in user_ingredients_set:
                     substitution_matches += 1
                     made_substitutions[required_ing] = sub
-                    found_substitute = True
                     break
             
-    if len(recipe_ingredients) == 0:
+    if not recipe_ingredients:
         return 0, {}
         
     score = (perfect_matches + (substitution_matches * 0.7)) / len(recipe_ingredients)
@@ -61,32 +47,27 @@ def recognize_ingredients(current_user):
     try:
         CLARIFAI_PAT = "deb567833d0c44789a5b2b0840802b06"
 
-        if CLARIFAI_PAT == "YOUR_VERIFIED_PERSONAL_ACCESS_TOKEN" or not CLARIFAI_PAT:
-             return jsonify({'message': 'Server configuration error: PAT not set in recipes.py.'}), 500
+        if not CLARIFAI_PAT or CLARIFAI_PAT == "YOUR_VERIFIED_PERSONAL_ACCESS_TOKEN":
+            return jsonify({'message': 'Server configuration error: PAT not set.'}), 500
 
         model = Model("https://clarifai.com/clarifai/main/models/food-item-recognition", pat=CLARIFAI_PAT)
         response = model.predict_by_bytes(image_bytes, input_type="image")
         
-        print("--- Full Clarifai API Response ---")
-        print(response)
-        print("---------------------------------")
-
         if response.status.code != 10000:
-             print(f"Clarifai API Error: {response.status.description}")
-             return jsonify({'message': 'Image recognition failed due to API error.'}), 500
+            return jsonify({'message': 'Image recognition failed due to API error.'}), 500
 
         concepts = response.outputs[0].data.concepts
         recognized_items = [concept.name.lower() for concept in concepts if concept.value > 0.4]
         final_ingredients = [item for item in recognized_items if item in all_ingredients]
         
         if not final_ingredients:
-            return jsonify({'message': 'Could not recognize any known ingredients. Please try a clearer photo.'}), 404
+            return jsonify({'message': 'Could not recognize any known ingredients.'}), 404
 
         return jsonify({"recognized_ingredients": final_ingredients})
 
     except Exception as e:
         print(f"Clarifai Error: {e}")
-        return jsonify({'message': 'Image recognition failed. Check server logs.'}), 500
+        return jsonify({'message': 'Image recognition failed.'}), 500
 
 @recipes_bp.route("/ingredients")
 @token_required
@@ -96,35 +77,46 @@ def get_ingredients(current_user):
 @recipes_bp.route("/generate", methods=["POST"])
 @token_required
 def generate(current_user):
-    user_preference = current_user.dietary_preference
+    # Get filters from the request's query parameters
+    dietary_filter = request.args.get('dietary', 'all')
+    difficulty_filter = request.args.get('difficulty', 'all')
+    max_time_filter = request.args.get('max_time', type=int)
+
+    # 1. Start with a list of all recipes
+    filtered_recipes = list(recipe_store.values())
+
+    # 2. Apply each filter sequentially
+    if dietary_filter != 'all':
+        filtered_recipes = [r for r in filtered_recipes if dietary_filter in r.tags]
     
-    if user_preference == 'veg':
-        filtered_recipes = {name: recipe for name, recipe in recipe_store.items() if recipe.diet_type == 'veg'}
-    else:
-        filtered_recipes = recipe_store
-    
+    if difficulty_filter != 'all':
+        filtered_recipes = [r for r in filtered_recipes if r.difficulty == difficulty_filter]
+
+    if max_time_filter:
+        filtered_recipes = [r for r in filtered_recipes if r.cook_time <= max_time_filter]
+
+    # 3. Perform ingredient matching on the now-filtered list of recipes
     data = request.json
     ingredients_from_user = data.get("ingredients", {}).keys()
     
     scores = []
-    for recipe in filtered_recipes.values():
+    for recipe in filtered_recipes:
         score, substitutions = calculate_match_score(recipe.ingredients.keys(), ingredients_from_user)
         if score > 0.1:
             scores.append((recipe.name, score, substitutions))
             
     scores.sort(key=lambda x: x[1], reverse=True)
     
+    # 4. Format the results for the frontend
     results = []
-    for r_name, score, subs in scores[:5]:
-        rec = filtered_recipes[r_name]
+    for r_name, score, subs in scores[:10]:
+        rec = recipe_store[r_name]
         results.append({
             "name": rec.name,
-            "similarity": round(score, 2),
             "difficulty": rec.difficulty,
             "cook_time": rec.cook_time,
             "cuisine": rec.cuisine,
             "image_url": rec.image_url,
-            "steps_snippet": rec.steps[0] if rec.steps else "Click for details.",
             "substitutions": subs
         })
     return jsonify({"recipes": results})
@@ -133,7 +125,6 @@ def generate(current_user):
 @token_required
 def get_all_recipes(current_user):
     results = []
-    # Sort recipes alphabetically for a consistent order
     sorted_recipes = sorted(recipe_store.values(), key=lambda r: r.name)
 
     for rec in sorted_recipes:
@@ -143,7 +134,7 @@ def get_all_recipes(current_user):
             "cook_time": rec.cook_time,
             "cuisine": rec.cuisine,
             "image_url": rec.image_url,
-            "substitutions": {} # Not needed for list view
+            "substitutions": {}
         })
     return jsonify({"recipes": results})
 
@@ -156,8 +147,7 @@ def add_favorite(current_user):
     if not recipe_name or recipe_name not in recipe_store:
         return jsonify({'message': 'Invalid recipe name supplied'}), 400
 
-    existing_fav = FavoriteRecipe.query.filter_by(user_id=current_user.id, recipe_name=recipe_name).first()
-    if existing_fav:
+    if FavoriteRecipe.query.filter_by(user_id=current_user.id, recipe_name=recipe_name).first():
         return jsonify({'message': 'Recipe is already in your favorites'}), 409
 
     new_favorite = FavoriteRecipe(user_id=current_user.id, recipe_name=recipe_name)
@@ -182,7 +172,7 @@ def get_favorites(current_user):
                 "cook_time": rec.cook_time,
                 "cuisine": rec.cuisine,
                 "image_url": rec.image_url,
-                "substitutions": {} # Not needed for favorite list view
+                "substitutions": {}
             })
             
     return jsonify({"recipes": results})
@@ -193,4 +183,6 @@ def get_recipe_details(current_user, recipe_name):
     recipe = recipe_store.get(recipe_name)
     if not recipe:
         return jsonify({"message": "Recipe not found"}), 404
+    # vars() automatically converts all of the recipe's attributes (including new ones) to a dictionary
     return jsonify(vars(recipe))
+

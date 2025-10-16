@@ -120,32 +120,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderRecipeDetail(recipe, substitutions) {
-        const metaHTML = `
-            <div class="recipe-detail-meta">
-                <span>${recipe.cuisine}</span> &bull; <span>${recipe.difficulty}</span> &bull; <span>${recipe.cook_time} mins</span>
+        originalRecipeData = { ...recipe }; // Store a copy of the original recipe data
+
+        const servingsHTML = `
+            <div class="servings-section">
+                <h3>Servings</h3>
+                <div class="servings-adjuster">
+                    <button id="decreaseServings" type="button">-</button>
+                    <span id="servings-display">${recipe.servings}</span>
+                    <button id="increaseServings" type="button">+</button>
+                </div>
             </div>
         `;
 
-        const recipeIngredients = Object.keys(recipe.ingredients);
-        const missingIngredients = recipeIngredients.filter(ing => !currentUserIngredients.has(ing) && !Object.values(substitutions).includes(ing));
-
-        let missingIngredientsHTML = '';
-        if (missingIngredients.length > 0) {
-            const missingList = missingIngredients.map(ingName => {
-                const amount = recipe.ingredients[ingName];
-                const formattedName = ingName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                return `<li>${formattedName} <span>${amount}g</span></li>`;
-            }).join('');
-
-            missingIngredientsHTML = `
-                <div class="missing-ingredients-section">
-                    <h3>You Will Also Need</h3>
-                    <ul class="ingredients-list">${missingList}</ul>
-                </div>
-            `;
-        }
-
-        const ingredientsHTML = recipe.ingredients ? Object.entries(recipe.ingredients).map(([name, amount]) => {
+        const ingredientsHTML = Object.entries(recipe.ingredients).map(([name, amount]) => {
             const formattedName = name.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             let subNote = '';
             for (const original in substitutions) {
@@ -154,14 +142,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     subNote = ` <span class="substitution-note">(for ${formattedOriginal})</span>`;
                 }
             }
-            return `<li>${formattedName}${subNote} <span>${amount}g</span></li>`;
-        }).join('') : '<li>Not available</li>';
+            // Add data attribute for original amount
+            return `<li data-original-amount="${amount}">${formattedName}${subNote} <span>${amount}g</span></li>`;
+        }).join('');
 
-        const nutritionHTML = recipe.nutrition ? Object.entries(recipe.nutrition).map(([key, value]) => {
-            const unit = key.toLowerCase() === 'calories' ? '' : 'g';
-            const formattedKey = key.charAt(0).toUpperCase() + key.slice(1);
-            return `<li><strong>${formattedKey}</strong> ${value}${unit}</li>`;
-        }).join('') : '<li>Not available</li>';
+        const metaHTML = `
+            <div class="recipe-detail-meta">
+                <span>${recipe.cuisine}</span> &bull; <span>${recipe.difficulty}</span> &bull; <span>${recipe.cook_time} mins</span>
+            </div>
+        `;
 
         const stepsHTML = recipe.steps.map(step => `<li>${step}</li>`).join('');
 
@@ -172,20 +161,11 @@ document.addEventListener('DOMContentLoaded', () => {
                      <h2>${recipe.name}</h2>
                      ${metaHTML}
                  </header>
-                 <img src="${recipe.image_url || 'https://placehold.co/800x400/1a1c1e/a0a0a0?text=No+Image'}" alt="${recipe.name}" class="recipe-detail-image">
-                 
+                 <img src="${recipe.image_url || 'https://placehold.co/800x400/0F1012/FFFFFF?text=No+Image'}" alt="${recipe.name}" class="recipe-detail-image">
+                 ${servingsHTML} 
                  <div class="ingredients-section">
                      <h3>Ingredients</h3>
                      <ul class="ingredients-list">${ingredientsHTML}</ul>
-                 </div>
-
-                 ${missingIngredientsHTML}
-
-                 <div class="recipe-content-grid">
-                     <div class="nutrition-section">
-                         <h3>Nutrition</h3>
-                         <ul class="nutrition-list">${nutritionHTML}</ul>
-                     </div>
                  </div>
                  <div class="steps-section">
                      <h3>Instructions</h3>
@@ -195,7 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
                       <button class="btn-primary fav-btn" data-name="${recipe.name}">Add to Favorites</button>
                  </div>
             </div>`;
+
         detailView.querySelector('.close-detail-btn').addEventListener('click', showListView);
+        document.getElementById('decreaseServings').addEventListener('click', () => updateServings(-1));
+        document.getElementById('increaseServings').addEventListener('click', () => updateServings(1));
     }
 
     // --- HELPER & FETCH FUNCTIONS ---
@@ -236,6 +219,25 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(error.message, 'error');
             resultsWrapper.innerHTML = '';
         }
+    }
+
+    function updateServings(change) {
+        const display = document.getElementById('servings-display');
+        let currentServings = parseInt(display.textContent);
+        const newServings = Math.max(1, currentServings + change);
+
+        if (newServings === currentServings) return;
+        display.textContent = newServings;
+
+        const originalServings = originalRecipeData.servings;
+        const ingredientsList = detailView.querySelector('.ingredients-list');
+
+        ingredientsList.querySelectorAll('li').forEach(li => {
+            const originalAmount = parseFloat(li.dataset.originalAmount);
+            const amountPerServing = originalAmount / originalServings;
+            const newAmount = Math.round(amountPerServing * newServings);
+            li.querySelector('span').textContent = `${newAmount}g`;
+        });
     }
 
     async function fetchAndShowRecipeDetails(recipeName, clickedCard) {
@@ -345,12 +347,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ingredientForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        updateActiveNav(homeBtn);
         toggleButtonLoading(generateBtn, true);
+
+        // 1. Get filter values
+        const dietary = dietaryFilter.value;
+        const difficulty = difficultyFilter.value;
+        const maxTime = timeFilter.value;
+
+        // 2. Build the query string for the API call
+        const params = new URLSearchParams();
+        if (dietary !== 'all') params.append('dietary', dietary);
+        if (difficulty !== 'all') params.append('difficulty', difficulty);
+        if (maxTime) params.append('max_time', maxTime);
+
+        const queryString = params.toString() ? `?${params.toString()}` : '';
+
+        // 3. Get ingredients (existing logic)
         const ingredients = {};
         const addedIngredients = new Set();
         let hasError = false;
-
         document.querySelectorAll(".ingredient-row").forEach(row => {
             if (hasError) return;
             const input = row.querySelector(".ingredient-input");
@@ -380,8 +395,10 @@ document.addEventListener('DOMContentLoaded', () => {
         currentUserIngredients = new Set(Object.keys(ingredients));
 
         try {
-            const res = await fetchWithAuth('/generate', {
+            // 4. Make the API call with the filters in the query string
+            const res = await fetchWithAuth(`/generate${queryString}`, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ingredients }),
             });
             if (!res.ok) throw new Error('Failed to get recipes');

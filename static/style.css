@@ -700,3 +700,33 @@ a.btn-secondary {
     background-color: #2D2F31;
     color: var(--accent-danger);
 }
+
+#filterSection h2 {
+    margin-bottom: 20px;
+}
+
+/* Creates a responsive grid for the filter controls */
+.filter-controls {
+    display: grid;
+    /* On larger screens, creates up to 3 columns */
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    /* Aligns the dropdowns to the bottom edge for a clean look */
+    align-items: end;
+}
+
+/* A container for each label and its dropdown */
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Styles the label above each dropdown */
+.filter-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding-left: 4px;
+    /* Small indent for alignment */
+}

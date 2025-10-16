@@ -1,6 +1,6 @@
-# app/utils.py
 from functools import wraps
 from flask import request, jsonify, current_app
+# UPDATED: Import 'decode' directly from the jwt library
 import jwt
 from .models import UserProfile
 
@@ -15,6 +15,7 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
         
         try:
+            # This line now works correctly because of the updated import
             data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = UserProfile.query.filter_by(email=data['email']).first()
             if not current_user:

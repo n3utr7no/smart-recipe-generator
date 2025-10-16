@@ -1,6 +1,4 @@
 // static/auth.js
-
-// UPDATED: Use a relative URL for the API endpoint
 const backendURL = '/api/auth';
 
 const loginForm = document.getElementById('loginForm');
@@ -16,7 +14,6 @@ function showToast(message, type = 'error') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-    // Use the newly found or created container
     document.getElementById('toastContainer').appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
 }
@@ -49,13 +46,14 @@ if (registerForm) {
         const name = document.getElementById('registerName').value;
         const email = document.getElementById('registerEmail').value;
         const password = document.getElementById('registerPassword').value;
-        const dietary_preference = document.getElementById('dietaryPreference').value;
+        // REMOVED: The line that tried to get 'dietaryPreference'
 
         try {
             const res = await fetch(`${backendURL}/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password, dietary_preference }),
+                // UPDATED: The body now only sends the correct fields
+                body: JSON.stringify({ name, email, password }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message);

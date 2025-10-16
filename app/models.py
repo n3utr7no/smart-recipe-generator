@@ -2,7 +2,8 @@ from .extensions import bcrypt
 from . import db
 
 class Recipe:
-    def __init__(self, name, ingredients, steps, nutrition, difficulty, cook_time, cuisine, image_url, reviews, diet_type):
+    # UPDATED: The __init__ method now accepts 'tags' and 'servings' instead of 'diet_type'
+    def __init__(self, name, ingredients, steps, nutrition, difficulty, cook_time, cuisine, image_url, reviews, tags, servings):
         self.name = name
         self.ingredients = {k.lower(): float(v) for k, v in ingredients.items()}
         self.steps = steps
@@ -12,21 +13,20 @@ class Recipe:
         self.cuisine = cuisine
         self.image_url = image_url
         self.reviews = reviews
-        self.diet_type = diet_type
+        self.tags = tags
+        self.servings = servings
 
 class UserProfile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(150), nullable=False)
-    dietary_preference = db.Column(db.String(50), nullable=False)
     favorites = db.relationship('FavoriteRecipe', backref='user', lazy=True, cascade="all, delete-orphan")
 
-    def __init__(self, email, password, dietary_preference, name):
+    def __init__(self, email, password, name):
         self.name = name
         self.email = email
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-        self.dietary_preference = dietary_preference
 
 class FavoriteRecipe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -107,7 +107,7 @@ def init_data():
             "Once the pasta is cooked, drain it well and add it directly to the skillet with the tomato sauce.",
             "Toss everything together until the pasta is evenly coated with the sauce. Serve immediately, topped with grated cheese."
         ], 
-        {"calories": 450, "protein": 15, "carbs": 60, "fat": 15}, "Easy", 20, "Italian", img_pasta, [], 'veg')
+        {"calories": 450, "protein": 15, "carbs": 60, "fat": 15}, "Easy", 20, "Italian", img_pasta, [], 'veg', 2)
 
     add_recipe("Chicken Rice", {"chicken": 200, "rice": 150, "onion": 50, "garlic": 10}, 
         [
@@ -119,7 +119,7 @@ def init_data():
             "Bring the mixture to a boil, then reduce the heat to low, cover the pot with a tight-fitting lid, and let it simmer for 18-20 minutes.",
             "Remove the pot from the heat and let it stand, covered, for 5-10 minutes before fluffing the rice with a fork and serving."
         ], 
-        {"calories": 600, "protein": 40, "carbs": 65, "fat": 18}, "Medium", 40, "Asian", img_chicken_rice, [], 'non-veg')
+        {"calories": 600, "protein": 40, "carbs": 65, "fat": 18}, "Medium", 40, "Asian", img_chicken_rice, [], 'non-veg', 2)
 
     add_recipe("Paneer Curry", {"paneer": 200, "tomato": 100, "onion": 50, "ginger": 5, "garlic": 5}, 
         [
@@ -131,7 +131,7 @@ def init_data():
             "Cover the pan and let the curry simmer for 5-7 minutes, allowing the paneer to absorb the flavors of the gravy.",
             "Garnish with fresh cilantro before serving."
         ], 
-        {"calories": 550, "protein": 22, "carbs": 30, "fat": 38}, "Medium", 35, "Indian", img_paneer_curry, [], 'veg')
+        {"calories": 550, "protein": 22, "carbs": 30, "fat": 38}, "Medium", 35, "Indian", img_paneer_curry, [], 'veg', 4)
     
     add_recipe("Butter Chicken", {"chicken": 250, "tomato": 150, "butter": 50, "cream": 50, "ginger": 10, "garlic": 10}, 
         [
@@ -142,7 +142,7 @@ def init_data():
             "Add the cooked chicken to the smooth gravy. Stir in the cream, a pinch of sugar (to balance acidity), and simmer for 5-10 minutes.",
             "Serve hot, garnished with a swirl of cream or a knob of butter."
         ], 
-        {"calories": 700, "protein": 30, "carbs": 15, "fat": 58}, "Medium", 45, "Indian", img_butter_chicken, [], 'non-veg')
+        {"calories": 700, "protein": 30, "carbs": 15, "fat": 58}, "Medium", 45, "Indian", img_butter_chicken, [], 'non-veg', 4)
 
     add_recipe("Chana Masala", {"chickpeas": 300, "tomato": 150, "onion": 50, "ginger": 10, "garlic": 10}, 
         [
@@ -154,7 +154,7 @@ def init_data():
             "Using the back of a spoon, mash some of the chickpeas against the side of the pan. This helps to thicken the gravy naturally.",
             "Simmer for at least 15 minutes, allowing the flavors to meld together. Garnish with cilantro and serve."
         ], 
-        {"calories": 450, "protein": 15, "carbs": 70, "fat": 12}, "Easy", 30, "Indian", img_chana_masala, [], 'veg')
+        {"calories": 450, "protein": 15, "carbs": 70, "fat": 12}, "Easy", 30, "Indian", img_chana_masala, [], 'veg', 4)
         
     add_recipe("Palak Paneer", {"spinach": 300, "paneer": 200, "onion": 50, "cream": 30, "garlic": 10}, 
         [
@@ -166,7 +166,7 @@ def init_data():
             "Add the fried paneer cubes and the cream to the spinach gravy. Season with salt and a pinch of garam masala.",
             "Stir gently and simmer for another 2-3 minutes. Serve hot."
         ], 
-        {"calories": 500, "protein": 20, "carbs": 15, "fat": 40}, "Medium", 40, "Indian", img_palak_paneer, [], 'veg')
+        {"calories": 500, "protein": 20, "carbs": 15, "fat": 40}, "Medium", 40, "Indian", img_palak_paneer, [], 'veg', 4)
         
     add_recipe("Lentil Soup (Dal)", {"lentils": 200, "tomato": 100, "turmeric": 5, "garlic": 10}, 
         [
@@ -178,7 +178,7 @@ def init_data():
             "Stir everything together well. Season with salt to taste.",
             "Garnish with fresh cilantro and serve hot with rice or bread."
         ], 
-        {"calories": 350, "protein": 18, "carbs": 60, "fat": 4}, "Easy", 35, "Indian", img_lentil_soup, [], 'veg')
+        {"calories": 350, "protein": 18, "carbs": 60, "fat": 4}, "Easy", 35, "Indian", img_lentil_soup, [], 'veg', 4)
 
     add_recipe("Spaghetti Carbonara", {"pasta": 200, "egg": 2, "bacon": 100, "parmesan": 50}, 
         [
@@ -189,7 +189,7 @@ def init_data():
             "Quickly pour the egg and cheese mixture over the pasta, stirring vigorously. The heat from the pasta will cook the eggs and create a creamy sauce.",
             "If the sauce is too thick, add a splash of the reserved pasta water until it reaches your desired consistency. Serve immediately."
         ], 
-        {"calories": 800, "protein": 35, "carbs": 75, "fat": 40}, "Medium", 25, "Italian", img_carbonara, [], 'non-veg')
+        {"calories": 800, "protein": 35, "carbs": 75, "fat": 40}, "Medium", 25, "Italian", img_carbonara, [], 'non-veg', 2)
 
     add_recipe("Mushroom Risotto", {"rice": 200, "mushroom": 150, "vegetable broth": 500, "parmesan": 40, "onion": 50}, 
         [
@@ -201,7 +201,7 @@ def init_data():
             "Continue adding the broth one ladle at a time, allowing each addition to be absorbed before adding the next. This process should take about 20-25 minutes.",
             "Once the rice is creamy but still has a slight bite (al dente), remove it from the heat. Stir in the grated Parmesan cheese and a final knob of butter. Serve immediately."
         ], 
-        {"calories": 600, "protein": 18, "carbs": 90, "fat": 15}, "Hard", 45, "Italian", img_risotto, [], 'veg')
+        {"calories": 600, "protein": 18, "carbs": 90, "fat": 15}, "Hard", 45, "Italian", img_risotto, [], 'veg', 2)
 
     add_recipe("Beef Lasagna", {"ground beef": 250, "lasagna noodles": 150, "tomato": 200, "mozzarella": 100, "onion": 50}, 
         [
@@ -213,7 +213,7 @@ def init_data():
             "Repeat the layers until all ingredients are used, finishing with a final layer of meat sauce and a generous topping of mozzarella cheese.",
             "Bake for 45-55 minutes, or until the top is golden and bubbly. Let it rest for 10-15 minutes before slicing and serving."
         ], 
-        {"calories": 900, "protein": 45, "carbs": 80, "fat": 45}, "Hard", 90, "Italian", img_lasagna, [], 'non-veg')
+        {"calories": 900, "protein": 45, "carbs": 80, "fat": 45}, "Hard", 90, "Italian", img_lasagna, [], 'non-veg', 6)
 
     add_recipe("Chicken Fajitas", {"chicken": 200, "bell pepper": 150, "onion": 100, "corn tortillas": 4}, 
         [
@@ -225,7 +225,7 @@ def init_data():
             "Warm the corn tortillas in a dry skillet or in the microwave.",
             "Serve the chicken and vegetable mixture immediately with the warm tortillas and your favorite toppings like salsa, guacamole, or sour cream."
         ], 
-        {"calories": 550, "protein": 30, "carbs": 40, "fat": 28}, "Easy", 25, "Mexican", img_fajitas, [], 'non-veg')
+        {"calories": 550, "protein": 30, "carbs": 40, "fat": 28}, "Easy", 25, "Mexican", img_fajitas, [], 'non-veg', 2)
 
     add_recipe("Veggie Burrito Bowl", {"rice": 150, "black beans": 100, "bell pepper": 100, "avocado": 50, "lime": 1}, 
         [
@@ -237,7 +237,7 @@ def init_data():
             "Top the rice with the sautéed vegetables, a scoop of black beans, and the sliced avocado.",
             "Serve immediately with a dollop of yogurt or sour cream, salsa, and extra lime wedges on the side."
         ], 
-        {"calories": 500, "protein": 12, "carbs": 85, "fat": 15}, "Easy", 20, "Mexican", img_burrito_bowl, [], 'veg')
+        {"calories": 500, "protein": 12, "carbs": 85, "fat": 15}, "Easy", 20, "Mexican", img_burrito_bowl, [], 'veg', 1)
 
     add_recipe("Fish Tacos", {"fish": 200, "cabbage": 100, "lime": 1, "corn tortillas": 4, "yogurt": 50}, 
         [
@@ -249,7 +249,7 @@ def init_data():
             "To assemble the tacos, place a piece of cooked fish in each warm tortilla.",
             "Top with the crunchy cabbage slaw and a drizzle of the yogurt crema. Serve immediately with extra lime wedges."
         ], 
-        {"calories": 450, "protein": 30, "carbs": 35, "fat": 20}, "Easy", 20, "Mexican", img_fish_tacos, [], 'non-veg')
+        {"calories": 450, "protein": 30, "carbs": 35, "fat": 20}, "Easy", 20, "Mexican", img_fish_tacos, [], 'non-veg', 2)
 
     add_recipe("Veggie Fried Rice", {"rice": 200, "egg": 1, "carrot": 50, "soy sauce": 30, "onion": 30}, 
         [
@@ -261,7 +261,7 @@ def init_data():
             "Drizzle the soy sauce over the rice and continue to stir-fry until everything is evenly coated and colored.",
             "Serve hot, optionally garnished with sliced green onions."
         ], 
-        {"calories": 450, "protein": 10, "carbs": 75, "fat": 12}, "Easy", 15, "Asian", img_fried_rice, [], 'veg')
+        {"calories": 450, "protein": 10, "carbs": 75, "fat": 12}, "Easy", 15, "Asian", img_fried_rice, [], 'veg', 2)
 
     add_recipe("Pad Thai", {"noodles": 150, "shrimp": 100, "tofu": 50, "peanut": 20, "egg": 1}, 
         [
@@ -273,7 +273,7 @@ def init_data():
             "Add bean sprouts and half of the crushed peanuts. Toss everything together for another minute.",
             "Serve immediately, garnished with the remaining crushed peanuts, fresh cilantro, and lime wedges."
         ], 
-        {"calories": 700, "protein": 25, "carbs": 90, "fat": 25}, "Medium", 30, "Thai", img_pad_thai, [], 'non-veg')
+        {"calories": 700, "protein": 25, "carbs": 90, "fat": 25}, "Medium", 30, "Thai", img_pad_thai, [], 'non-veg', 2)
 
     add_recipe("Mapo Tofu", {"tofu": 250, "pork": 50, "soy sauce": 30}, 
         [
@@ -285,7 +285,7 @@ def init_data():
             "In a small bowl, mix cornstarch with a little cold water to make a slurry. Stir it into the simmering sauce to thicken it.",
             "Return the cooked pork to the wok. Drizzle with sesame oil and sprinkle with ground Szechuan peppercorns and chopped scallions before serving."
         ], 
-        {"calories": 400, "protein": 20, "carbs": 10, "fat": 30}, "Medium", 25, "Chinese", img_mapo_tofu, [], 'non-veg')
+        {"calories": 400, "protein": 20, "carbs": 10, "fat": 30}, "Medium", 25, "Chinese", img_mapo_tofu, [], 'non-veg', 3)
 
     add_recipe("Zucchini Stir-Fry", {"zucchini": 200, "garlic": 10, "soy sauce": 15, "onion": 30}, 
         [
@@ -297,7 +297,7 @@ def init_data():
             "Cook for another 30 seconds.",
             "Serve immediately as a side dish."
         ], 
-        {"calories": 150, "protein": 5, "carbs": 10, "fat": 10}, "Easy", 10, "Asian", img_zucchini, [], 'veg')
+        {"calories": 150, "protein": 5, "carbs": 10, "fat": 10}, "Easy", 10, "Asian", img_zucchini, [], 'veg', 2)
 
     add_recipe("Macaroni and Cheese", {"macaroni": 200, "cheddar cheese": 100, "milk": 150, "butter": 30, "all-purpose flour": 20}, 
         [
@@ -309,7 +309,7 @@ def init_data():
             "Season the cheese sauce with salt and pepper to taste.",
             "Pour the cheese sauce over the cooked macaroni and stir until everything is well combined and creamy. Serve immediately."
         ], 
-        {"calories": 800, "protein": 25, "carbs": 70, "fat": 45}, "Easy", 25, "American", img_mac_cheese, [], 'veg')
+        {"calories": 800, "protein": 25, "carbs": 70, "fat": 45}, "Easy", 25, "American", img_mac_cheese, [], 'veg', 4)
 
     add_recipe("Classic Cheeseburger", {"ground beef": 150, "bread": 1, "cheddar cheese": 30, "lettuce": 20, "tomato": 20}, 
         [
@@ -321,7 +321,7 @@ def init_data():
             "Assemble the burger: Place the cooked patty on the bottom bun, then top with lettuce, tomato slices, and any other desired condiments.",
             "Place the top bun on and serve immediately."
         ], 
-        {"calories": 600, "protein": 30, "carbs": 35, "fat": 38}, "Easy", 20, "American", img_cheeseburger, [], 'non-veg')
+        {"calories": 600, "protein": 30, "carbs": 35, "fat": 38}, "Easy", 20, "American", img_cheeseburger, [], 'non-veg', 1)
 
     add_recipe("Grilled Salmon", {"salmon": 200, "lemon": 1, "olive oil": 10, "garlic": 5}, 
         [
@@ -334,7 +334,7 @@ def init_data():
             "Flip the salmon and cook for another 2-4 minutes until cooked to your desired doneness. The salmon is done when it flakes easily with a fork.",
             "Remove from the grill and serve immediately with fresh lemon wedges to squeeze over the top."
         ], 
-        {"calories": 450, "protein": 40, "carbs": 2, "fat": 30}, "Easy", 15, "American", img_salmon, [], 'non-veg')
+        {"calories": 450, "protein": 40, "carbs": 2, "fat": 30}, "Easy", 15, "American", img_salmon, [], 'non-veg', 1)
 
     add_recipe("Shepherd's Pie", {"lamb": 250, "potato": 300, "carrot": 100, "onion": 50, "vegetable broth": 100}, 
         [
@@ -347,7 +347,7 @@ def init_data():
             "Carefully top the filling with the mashed potatoes, spreading them to the edges to create a seal. Use a fork to create decorative ridges on top.",
             "Bake for 20-25 minutes, or until the topping is golden brown and the filling is bubbly. Let it rest for a few minutes before serving."
         ], 
-        {"calories": 750, "protein": 30, "carbs": 50, "fat": 45}, "Medium", 75, "European", img_shepherds_pie, [], 'non-veg')
+        {"calories": 750, "protein": 30, "carbs": 50, "fat": 45}, "Medium", 75, "European", img_shepherds_pie, [], 'non-veg', 4)
 
     add_recipe("Broccoli Cheddar Soup", {"broccoli": 300, "cheddar cheese": 100, "milk": 200, "onion": 50, "carrot": 50}, 
         [
@@ -359,7 +359,7 @@ def init_data():
             "Continue to stir gently until the cheese is completely melted and the soup is heated through. Do not let the soup boil after adding the cheese, as it can cause it to curdle.",
             "Season with salt and pepper to taste before serving."
         ], 
-        {"calories": 450, "protein": 15, "carbs": 20, "fat": 35}, "Easy", 30, "American", img_broccoli_soup, [], 'veg')
+        {"calories": 450, "protein": 15, "carbs": 20, "fat": 35}, "Easy", 30, "American", img_broccoli_soup, [], 'veg', 4)
 
     add_recipe("Chicken Noodle Soup", {"chicken": 150, "noodles": 100, "carrot": 50, "onion": 50}, 
         [
@@ -371,7 +371,7 @@ def init_data():
             "Cook for 7-10 minutes, or until the noodles are tender, according to package directions.",
             "Season the soup with salt, pepper, and fresh herbs like parsley or dill before serving."
         ], 
-        {"calories": 350, "protein": 25, "carbs": 30, "fat": 15}, "Easy", 40, "American", img_chicken_noodle, [], 'non-veg')
+        {"calories": 350, "protein": 25, "carbs": 30, "fat": 15}, "Easy", 40, "American", img_chicken_noodle, [], 'non-veg', 4)
 
     add_recipe("Greek Salad", {"tomato": 100, "lettuce": 150, "cheese": 50, "olive oil": 10, "onion": 30}, 
         [
@@ -383,7 +383,7 @@ def init_data():
             "Just before serving, pour the dressing over the salad.",
             "Toss everything gently to combine and coat the vegetables evenly. Serve immediately."
         ], 
-        {"calories": 300, "protein": 8, "carbs": 10, "fat": 25}, "Easy", 10, "Mediterranean", img_greek_salad, [], 'veg')
+        {"calories": 300, "protein": 8, "carbs": 10, "fat": 25}, "Easy", 10, "Mediterranean", img_greek_salad, [], 'veg', 2)
 
     add_recipe("French Onion Soup", {"onion": 400, "vegetable broth": 500, "bread": 2, "cheese": 50}, 
         [
@@ -395,7 +395,7 @@ def init_data():
             "Top each bowl with a slice of toasted bread (like a baguette crouton).",
             "Cover the bread with a generous amount of grated Gruyère or Swiss cheese. Place the bowls under the broiler until the cheese is melted, bubbly, and golden brown. Serve carefully."
         ], 
-        {"calories": 400, "protein": 15, "carbs": 45, "fat": 18}, "Medium", 60, "European", img_french_onion, [], 'veg')
+        {"calories": 400, "protein": 15, "carbs": 45, "fat": 18}, "Medium", 60, "European", img_french_onion, [], 'veg', 2)
 
     add_recipe("Classic Pancakes", {"all-purpose flour": 150, "egg": 1, "milk": 150, "sugar": 20, "butter": 20}, 
         [
@@ -407,7 +407,7 @@ def init_data():
             "Pour or scoop about 1/4 cup of batter for each pancake onto the hot griddle.",
             "Cook for 2-3 minutes, or until bubbles appear on the surface and the edges look set. Flip and cook on the other side for another 1-2 minutes until golden brown. Serve warm with your favorite toppings."
         ], 
-        {"calories": 400, "protein": 10, "carbs": 60, "fat": 12}, "Easy", 20, "American", img_pancakes, [], 'veg')
+        {"calories": 400, "protein": 10, "carbs": 60, "fat": 12}, "Easy", 20, "American", img_pancakes, [], 'veg', 2)
 
     add_recipe("Scrambled Eggs", {"egg": 3, "milk": 30, "butter": 10}, 
         [
@@ -419,7 +419,7 @@ def init_data():
             "Continue this gentle pushing motion until the eggs are mostly set but still look slightly moist and glossy.",
             "Remove the skillet from the heat immediately to prevent overcooking. The residual heat will finish the job. Serve right away."
         ], 
-        {"calories": 300, "protein": 20, "carbs": 2, "fat": 24}, "Easy", 5, "Universal", img_scrambled_eggs, [], 'veg')
+        {"calories": 300, "protein": 20, "carbs": 2, "fat": 24}, "Easy", 5, "Universal", img_scrambled_eggs, [], 'veg', 1)
 
     add_recipe("Avocado Toast", {"bread": 2, "avocado": 1, "lemon": 1, "egg": 1}, 
         [
@@ -431,7 +431,7 @@ def init_data():
             "For extra protein and flavor, top your avocado toast with a fried or poached egg.",
             "Serve immediately."
         ], 
-        {"calories": 350, "protein": 12, "carbs": 30, "fat": 20}, "Easy", 5, "Universal", img_avocado_toast, [], 'veg')
+        {"calories": 350, "protein": 12, "carbs": 30, "fat": 20}, "Easy", 5, "Universal", img_avocado_toast, [], 'veg', 1)
 
     add_recipe("Stuffed Bell Peppers", {"bell pepper": 2, "ground beef": 150, "rice": 50, "tomato": 50, "onion": 30}, 
         [
@@ -443,7 +443,7 @@ def init_data():
             "Top with shredded cheese if desired.",
             "Bake for 20-25 minutes, or until the filling is heated through and the peppers are tender. Serve hot."
         ], 
-        {"calories": 500, "protein": 28, "carbs": 40, "fat": 25}, "Medium", 60, "Mediterranean", img_stuffed_peppers, [], 'non-veg')
+        {"calories": 500, "protein": 28, "carbs": 40, "fat": 25}, "Medium", 60, "Mediterranean", img_stuffed_peppers, [], 'non-veg', 2)
 
     add_recipe("Simple Cabbage Salad", {"cabbage": 200, "carrot": 50, "vinegar": 10, "olive oil": 10}, 
         [
@@ -454,5 +454,5 @@ def init_data():
             "For the best flavor, let the salad sit for at least 15 minutes before serving. This allows the cabbage to soften slightly and absorb the flavors of the dressing.",
             "Toss again just before serving."
         ], 
-        {"calories": 150, "protein": 2, "carbs": 15, "fat": 10}, "Easy", 10, "Universal", img_cabbage_salad, [], 'veg')
+        {"calories": 150, "protein": 2, "carbs": 15, "fat": 10}, "Easy", 10, "Universal", img_cabbage_salad, [], 'veg', 4)
 

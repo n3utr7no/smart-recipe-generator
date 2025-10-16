@@ -49,6 +49,37 @@
     <div id="masterDetailContainer">
         <!-- Master Panel (Scrollable List) -->
         <main id="listView" class="container">
+            <section class="card" id="filterSection">
+                <h2>Recipe Filters</h2>
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label for="dietaryFilter">Dietary</label>
+                        <select id="dietaryFilter">
+                            <option value="all">All</option>
+                            <option value="veg">Vegetarian</option>
+                            <option value="gluten-free">Gluten-Free</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="difficultyFilter">Difficulty</label>
+                        <select id="difficultyFilter">
+                            <option value="all">All</option>
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="timeFilter">Max Cook Time</label>
+                        <select id="timeFilter">
+                            <option value="">Any</option>
+                            <option value="15">15 mins</option>
+                            <option value="30">30 mins</option>
+                            <option value="60">60 mins</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
             <section class="card">
                 <h2>Your Ingredients</h2>
                 <div id="image-upload-area">
