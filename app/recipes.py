@@ -6,7 +6,6 @@ import math
 
 recipes_bp = Blueprint('recipes', __name__)
 
-# ... (all other routes and functions are unchanged) ...
 def calculate_match_score(recipe_ingredients, user_ingredients):
     perfect_matches = 0
     substitution_matches = 0
@@ -77,12 +76,15 @@ def get_ingredients(current_user):
 @recipes_bp.route("/generate", methods=["POST"])
 @token_required
 def generate(current_user):
+    # Get filters from query parameters
     dietary_filter = request.args.get('dietary', 'all')
     difficulty_filter = request.args.get('difficulty', 'all')
     max_time_filter = request.args.get('max_time', type=int)
 
+    # 1. Start with all recipes
     filtered_recipes = list(recipe_store.values())
 
+    # 2. Apply filters
     if dietary_filter != 'all':
         filtered_recipes = [r for r in filtered_recipes if dietary_filter in r.tags]
     
@@ -92,6 +94,7 @@ def generate(current_user):
     if max_time_filter:
         filtered_recipes = [r for r in filtered_recipes if r.cook_time <= max_time_filter]
 
+    # 3. Perform ingredient matching on the filtered list
     data = request.json
     ingredients_from_user = data.get("ingredients", {}).keys()
     
@@ -103,6 +106,7 @@ def generate(current_user):
             
     scores.sort(key=lambda x: x[1], reverse=True)
     
+    # 4. Format results
     results = []
     for r_name, score, subs in scores[:10]:
         rec = recipe_store[r_name]
@@ -223,7 +227,6 @@ def get_recipe_ratings(current_user, recipe_name):
 @recipes_bp.route("/suggestions", methods=["GET"])
 @token_required
 def get_suggestions(current_user):
-    # --- Simple Collaborative Filtering Logic ---
     user_high_ratings = {r.recipe_name for r in RecipeRating.query.filter(
         RecipeRating.user_id == current_user.id, RecipeRating.rating >= 3
     ).all()}
@@ -231,8 +234,6 @@ def get_suggestions(current_user):
     suggestions = []
 
     def get_top_rated_fallback():
-        # UPDATED FALLBACK: Suggest the absolute top-rated recipes on the platform,
-        # sorted by average rating then by number of ratings.
         top_recipes = db.session.query(
             RecipeRating.recipe_name
         ).group_by(RecipeRating.recipe_name).order_by(
@@ -265,7 +266,6 @@ def get_suggestions(current_user):
         if not suggestions:
             suggestions = get_top_rated_fallback()
 
-    # Format the suggestions for the frontend
     results = []
     for name in suggestions:
         rec = recipe_store.get(name)
@@ -280,3 +280,4 @@ def get_suggestions(current_user):
             })
     
     return jsonify({"recipes": results})
+

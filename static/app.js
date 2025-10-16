@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allIngredients = [];
     let currentUserIngredients = new Set();
-    let originalRecipeData = null; // To store original recipe for serving size calculations
+    let originalRecipeData = null;
 
     // --- DOM REFERENCES ---
     const masterDetailContainer = document.getElementById('masterDetailContainer');
@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const difficultyFilter = document.getElementById('difficultyFilter');
     const timeFilter = document.getElementById('timeFilter');
 
-    // --- HELPER FUNCTIONS ---
+    // --- HELPER & AUTH FUNCTIONS ---
     function parseJwt(token) {
         try {
             return JSON.parse(atob(token.split('.')[1]));
@@ -60,12 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchWithAuth(endpoint, options = {}) {
         const headers = {
             'Authorization': `Bearer ${authToken}`,
-            ...options.headers,
+            ...options.headers
         };
         if (!(options.body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';
         }
-        const response = await fetch(`${backendURL}${endpoint}`, { ...options, headers });
+        const response = await fetch(`${backendURL}${endpoint}`, {
+            ...options,
+            headers
+        });
         if (response.status === 401 || response.status === 403) {
             showToast('Session expired. Please log in again.', 'error');
             setTimeout(handleLogout, 2000);
@@ -74,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return response;
     }
 
-    // --- VIEW MANAGEMENT ---
+    // --- VIEW & RENDER FUNCTIONS ---
     function showListView() {
         masterDetailContainer.classList.remove('detail-view-open');
         document.querySelectorAll('.recipe-card.selected').forEach(card => card.classList.remove('selected'));
@@ -87,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
         masterDetailContainer.classList.add('detail-view-open');
     }
 
-    // --- RENDERING FUNCTIONS ---
     function renderResults(recipes, title = 'Generated Recipes') {
         if (!recipes || recipes.length === 0) {
             resultsWrapper.innerHTML = `<div class="card empty-state"><p>No matching recipes found. Try different ingredients or filters!</p></div>`;
@@ -98,25 +100,26 @@ document.addEventListener('DOMContentLoaded', () => {
             if (r.cuisine) metaItems.push(`<span>${r.cuisine}</span>`);
             if (r.difficulty) metaItems.push(`<span><b>Difficulty:</b> ${r.difficulty}</span>`);
             if (r.cook_time) metaItems.push(`<span><b>Cook Time:</b> ${r.cook_time} mins</span>`);
-            const hasSubstitutions = r.substitutions && Object.keys(r.substitutions).length > 0;
-            if (hasSubstitutions) {
+            if (r.substitutions && Object.keys(r.substitutions).length > 0) {
                 metaItems.push(`<span class="substitution-badge">⚠️ Substitutes</span>`);
             }
-            const subsData = hasSubstitutions ? JSON.stringify(r.substitutions) : '';
+            const subsData = r.substitutions ? JSON.stringify(r.substitutions) : '';
             return `
-            <div class="recipe-card" data-recipe-name="${r.name}" data-substitutions='${subsData}'>
-                <img src="${r.image_url || 'https://via.placeholder.com/150'}" alt="${r.name}" class="recipe-card-image">
-                <div class="recipe-card-content">
-                    <h3>${r.name}</h3>
-                    <div class="meta">${metaItems.join(' <span class="text-muted">&bull;</span> ')}</div>
-                </div>
-            </div>`;
+                <div class="recipe-card" data-recipe-name="${r.name}" data-substitutions='${subsData}'>
+                    <img src="${r.image_url || 'https://via.placeholder.com/150'}" alt="${r.name}" class="recipe-card-image">
+                    <div class="recipe-card-content">
+                        <h3>${r.name}</h3>
+                        <div class="meta">${metaItems.join(' <span class="text-muted">&bull;</span> ')}</div>
+                    </div>
+                </div>`;
         }).join("");
         resultsWrapper.innerHTML = `<section class="card results-container"><h2>${title}</h2><div class="recipe-list">${recipeCardsHTML}</div></section>`;
     }
 
     function renderRecipeDetail(recipe, substitutions) {
-        originalRecipeData = { ...recipe };
+        originalRecipeData = {
+            ...recipe
+        };
 
         const servingsHTML = `
             <div class="servings-section">
@@ -205,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
         detailView.querySelector('.close-detail-btn').addEventListener('click', showListView);
         document.getElementById('decreaseServings').addEventListener('click', () => updateServings(-1));
         document.getElementById('increaseServings').addEventListener('click', () => updateServings(1));
-
         fetchAndDisplayRatings(recipe.name);
         detailView.querySelector('.star-rating').addEventListener('click', handleStarClick);
     }
@@ -215,14 +217,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const display = document.getElementById('servings-display');
         let currentServings = parseInt(display.textContent);
         const newServings = Math.max(1, currentServings + change);
-
         if (newServings === currentServings) return;
         display.textContent = newServings;
 
         const originalServings = originalRecipeData.servings;
         const ingredientsList = detailView.querySelector('.ingredients-list');
 
-        ingredientsList.querySelectorAll('li').forEach(li => {
+        ingredientsList.querySelectorAll('li[data-original-amount]').forEach(li => {
             const originalAmount = parseFloat(li.dataset.originalAmount);
             const amountPerServing = originalAmount / originalServings;
             const newAmount = Math.round(amountPerServing * newServings);
@@ -235,7 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetchWithAuth(`/recipe/${recipeName}/ratings`);
             if (!res.ok) throw new Error('Could not load ratings');
             const data = await res.json();
-
             const summaryEl = document.getElementById('ratingSummary');
             if (data.rating_count > 0) {
                 summaryEl.textContent = `Average: ${data.average_rating.toFixed(1)} / 5 (from ${data.rating_count} ratings)`;
@@ -250,16 +250,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleStarClick(event) {
         if (!event.target.classList.contains('star')) return;
-
         const rating = parseInt(event.target.dataset.value);
         const recipeName = event.currentTarget.dataset.recipeName;
-
         updateStarDisplay(rating);
-
         try {
             await fetchWithAuth('/rate', {
                 method: 'POST',
-                body: JSON.stringify({ recipe_name: recipeName, rating: rating }),
+                body: JSON.stringify({
+                    recipe_name: recipeName,
+                    rating: rating
+                }),
             });
             showToast('Your rating has been saved!', 'success');
             fetchAndDisplayRatings(recipeName);
@@ -349,6 +349,81 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- CORE GENERATION AND EVENT LISTENERS ---
+    async function generateAndFilterRecipes() {
+        const ingredientRows = document.querySelectorAll(".ingredient-row");
+        const hasIngredients = Array.from(ingredientRows).some(row => row.querySelector('.ingredient-input').value.trim() !== '');
+
+        if (!hasIngredients) {
+            resultsWrapper.innerHTML = '';
+            return;
+        }
+
+        updateActiveNav(homeBtn);
+        toggleButtonLoading(generateBtn, true);
+        resultsWrapper.innerHTML = `<div class="card"><div class="spinner" style="display:block; margin: 80px auto; width: 40px; height: 40px;"></div></div>`;
+
+        const dietary = dietaryFilter.value;
+        const difficulty = difficultyFilter.value;
+        const maxTime = timeFilter.value;
+
+        const params = new URLSearchParams();
+        if (dietary !== 'all') params.append('dietary', dietary);
+        if (difficulty !== 'all') params.append('difficulty', difficulty);
+        if (maxTime) params.append('max_time', maxTime);
+        const queryString = params.toString() ? `?${params.toString()}` : '';
+
+        const ingredients = {};
+        const addedIngredients = new Set();
+        let hasError = false;
+
+        ingredientRows.forEach(row => {
+            if (hasError) return;
+            const input = row.querySelector(".ingredient-input");
+            const ing = input.value.trim().toLowerCase();
+            if (ing) {
+                if (!allIngredients.map(i => i.toLowerCase()).includes(ing)) {
+                    showToast(`'${input.value}' is not a valid ingredient.`, "error");
+                    hasError = true;
+                    return;
+                }
+                if (addedIngredients.has(ing)) {
+                    showToast(`'${input.value}' has been added more than once.`, "error");
+                    hasError = true;
+                    return;
+                }
+                ingredients[ing] = 1;
+                addedIngredients.add(ing);
+            }
+        });
+
+        if (hasError || Object.keys(ingredients).length === 0) {
+            if (!hasError) showToast("Please add at least one ingredient.", "error");
+            toggleButtonLoading(generateBtn, false);
+            resultsWrapper.innerHTML = '';
+            return;
+        }
+
+        currentUserIngredients = new Set(Object.keys(ingredients));
+
+        try {
+            const res = await fetchWithAuth(`/generate${queryString}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    ingredients
+                }),
+            });
+            if (!res.ok) throw new Error('Failed to get recipes');
+            const data = await res.json();
+            renderResults(data.recipes, "Generated Recipes");
+        } catch (error) {
+            showToast(error.message, 'error');
+            resultsWrapper.innerHTML = '';
+        } finally {
+            toggleButtonLoading(generateBtn, false);
+        }
+    }
+
     function addIngredientRow(ingredientValue = '') {
         const row = document.createElement("div");
         row.className = "ingredient-row";
@@ -362,27 +437,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- EVENT LISTENERS ---
     if (profileBtn) {
-        profileBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
+        profileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             profileDropdownMenu.classList.toggle('show');
         });
     }
-
     if (profileDropdownMenu) {
-        profileDropdownMenu.addEventListener('click', (event) => {
-            if (event.target.id === 'logoutBtn') {
-                event.preventDefault();
+        profileDropdownMenu.addEventListener('click', (e) => {
+            if (e.target.id === 'logoutBtn') {
+                e.preventDefault();
                 handleLogout();
             }
         });
     }
-
     window.addEventListener('click', () => {
         if (profileDropdownMenu?.classList.contains('show')) {
             profileDropdownMenu.classList.remove('show');
         }
     });
-
     [homeBtn, discoverBtn, suggestionsBtn, favoritesBtn].forEach(btn => {
         if (btn) {
             btn.addEventListener('click', (e) => {
@@ -399,13 +471,14 @@ document.addEventListener('DOMContentLoaded', () => {
     detailView.addEventListener('click', async (e) => {
         if (e.target.classList.contains('fav-btn')) {
             const button = e.target;
-            const recipeName = button.dataset.name;
             button.disabled = true;
             button.textContent = 'Saving...';
             try {
                 const res = await fetchWithAuth('/favorites', {
                     method: 'POST',
-                    body: JSON.stringify({ recipe_name: recipeName })
+                    body: JSON.stringify({
+                        recipe_name: button.dataset.name
+                    })
                 });
                 if (!res.ok) {
                     const data = await res.json();
@@ -422,75 +495,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     addIngredientBtn.addEventListener("click", () => addIngredientRow());
-
-    ingredientForm.addEventListener("submit", async (e) => {
+    ingredientForm.addEventListener("submit", (e) => {
         e.preventDefault();
-        updateActiveNav(homeBtn);
-        toggleButtonLoading(generateBtn, true);
-
-        const dietary = dietaryFilter.value;
-        const difficulty = difficultyFilter.value;
-        const maxTime = timeFilter.value;
-
-        const params = new URLSearchParams();
-        if (dietary !== 'all') params.append('dietary', dietary);
-        if (difficulty !== 'all') params.append('difficulty', difficulty);
-        if (maxTime) params.append('max_time', maxTime);
-        const queryString = params.toString() ? `?${params.toString()}` : '';
-
-        const ingredients = {};
-        const addedIngredients = new Set();
-        let hasError = false;
-
-        document.querySelectorAll(".ingredient-row").forEach(row => {
-            if (hasError) return;
-            const input = row.querySelector(".ingredient-input");
-            const ing = input.value.trim().toLowerCase();
-            if (ing) {
-                if (!allIngredients.map(i => i.toLowerCase()).includes(ing)) {
-                    showToast(`'${input.value}' is not a valid ingredient.`, "error");
-                    hasError = true; return;
-                }
-                if (addedIngredients.has(ing)) {
-                    showToast(`'${input.value}' has been added more than once.`, "error");
-                    hasError = true; return;
-                }
-                ingredients[ing] = 1;
-                addedIngredients.add(ing);
-            }
-        });
-
-        if (hasError || Object.keys(ingredients).length === 0) {
-            if (!hasError) showToast("Please add at least one ingredient.", "error");
-            toggleButtonLoading(generateBtn, false);
-            return;
-        }
-        currentUserIngredients = new Set(Object.keys(ingredients));
-        try {
-            const res = await fetchWithAuth(`/generate${queryString}`, {
-                method: 'POST',
-                body: JSON.stringify({ ingredients }),
-            });
-            if (!res.ok) throw new Error('Failed to get recipes');
-            const data = await res.json();
-            renderResults(data.recipes);
-        } catch (error) {
-            showToast(error.message, 'error');
-        } finally {
-            toggleButtonLoading(generateBtn, false);
+        generateAndFilterRecipes();
+    });
+    [dietaryFilter, difficultyFilter, timeFilter].forEach(filter => {
+        if (filter) {
+            filter.addEventListener('change', generateAndFilterRecipes);
         }
     });
-
     resultsWrapper.addEventListener('click', (e) => {
         const card = e.target.closest('.recipe-card');
         if (card) {
             fetchAndShowRecipeDetails(card.dataset.recipeName, card);
         }
     });
-
     if (imageUploadBtn) {
         imageUploadBtn.addEventListener('click', () => imageUploadInput.click());
-        imageUploadInput.addEventListener('change', async (event) => {
+        imageUploadInput.addEventListener('change', async (e) => {
             const file = event.target.files[0];
             if (!file) return;
             imageUploadBtn.disabled = true;
@@ -498,7 +520,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('image', file);
             try {
-                const res = await fetchWithAuth('/recognize-ingredients', { method: 'POST', body: formData });
+                const res = await fetchWithAuth('/recognize-ingredients', {
+                    method: 'POST',
+                    body: formData
+                });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || 'Recognition failed');
                 data.recognized_ingredients.forEach(addRecognizedIngredient);
@@ -522,6 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- FINAL INITIALIZATION ---
     async function initializeApp() {
         try {
             const res = await fetchWithAuth('/ingredients');
@@ -535,26 +561,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showToast(message, type = 'error') {
-        const toastContainer = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        toastContainer.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
+        const c = document.getElementById('toastContainer');
+        const t = document.createElement('div');
+        t.className = `toast ${type}`;
+        t.textContent = message;
+        c.appendChild(t);
+        setTimeout(() => t.remove(), 4000);
     }
 
     function toggleButtonLoading(button, isLoading) {
-        const spinner = button.querySelector('.spinner');
-        const text = button.querySelector('span');
-        if (isLoading) {
-            button.disabled = true;
-            if (spinner) spinner.style.display = 'block';
-            if (text) text.style.display = 'inline';
-        } else {
-            button.disabled = false;
-            if (spinner) spinner.style.display = 'none';
-            if (text) text.style.display = 'inline';
-        }
+        const s = button.querySelector('.spinner');
+        const t = button.querySelector('span');
+        if (button) button.disabled = isLoading;
+        if (s) s.style.display = isLoading ? 'block' : 'none';
+        if (t) t.style.display = isLoading ? 'none' : 'inline';
     }
     initializeApp();
 });
