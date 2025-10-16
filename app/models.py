@@ -2,7 +2,6 @@ from .extensions import bcrypt
 from . import db
 
 class Recipe:
-    # UPDATED: The __init__ method now accepts 'tags' and 'servings' instead of 'diet_type'
     def __init__(self, name, ingredients, steps, nutrition, difficulty, cook_time, cuisine, image_url, reviews, tags, servings):
         self.name = name
         self.ingredients = {k.lower(): float(v) for k, v in ingredients.items()}
@@ -22,6 +21,7 @@ class UserProfile(db.Model):
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(150), nullable=False)
     favorites = db.relationship('FavoriteRecipe', backref='user', lazy=True, cascade="all, delete-orphan")
+    ratings = db.relationship('RecipeRating', backref='user', lazy=True, cascade="all, delete-orphan")
 
     def __init__(self, email, password, name):
         self.name = name
@@ -33,6 +33,14 @@ class FavoriteRecipe(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user_profile.id'), nullable=False)
     recipe_name = db.Column(db.String(150), nullable=False)
     __table_args__ = (db.UniqueConstraint('user_id', 'recipe_name', name='_user_recipe_uc'),)
+
+class RecipeRating(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user_profile.id'), nullable=False)
+    recipe_name = db.Column(db.String(150), nullable=False)
+    rating = db.Column(db.Integer, nullable=False) # Rating from 1 to 5
+    # A user can only rate a recipe once
+    __table_args__ = (db.UniqueConstraint('user_id', 'recipe_name', name='_user_rating_uc'),)
 
 all_ingredients = []
 recipe_store = {}

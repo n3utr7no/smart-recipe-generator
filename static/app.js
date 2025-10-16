@@ -1,8 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // UPDATED: Use a relative URL for the API
     const backendURL = '/api';
     const authToken = localStorage.getItem('authToken');
-
     if (!authToken) {
         window.location.href = '/login';
         return;
@@ -10,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allIngredients = [];
     let currentUserIngredients = new Set();
+    let originalRecipeData = null; // To store original recipe for serving size calculations
 
     // --- DOM REFERENCES ---
     const masterDetailContainer = document.getElementById('masterDetailContainer');
@@ -28,6 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const homeBtn = document.getElementById('homeBtn');
     const discoverBtn = document.getElementById('discoverBtn');
     const profileDropdownMenu = document.getElementById('profileDropdownMenu');
+    const suggestionsBtn = document.getElementById('suggestionsBtn');
+    const dietaryFilter = document.getElementById('dietaryFilter');
+    const difficultyFilter = document.getElementById('difficultyFilter');
+    const timeFilter = document.getElementById('timeFilter');
 
     // --- HELPER FUNCTIONS ---
     function parseJwt(token) {
@@ -38,12 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- AUTH FUNCTIONS ---
     function handleLogout() {
         localStorage.removeItem('authToken');
         window.location.href = '/login';
     }
 
+    // --- INITIALIZATION ---
     const userInfo = parseJwt(authToken);
     if (userInfo) {
         const dropdownUserName = document.getElementById('dropdownUserName');
@@ -59,9 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'Authorization': `Bearer ${authToken}`,
             ...options.headers,
         };
-        if (options.body instanceof FormData) {
-            delete headers['Content-Type'];
-        } else {
+        if (!(options.body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';
         }
         const response = await fetch(`${backendURL}${endpoint}`, { ...options, headers });
@@ -86,10 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
         masterDetailContainer.classList.add('detail-view-open');
     }
 
-    // --- RENDERING ---
+    // --- RENDERING FUNCTIONS ---
     function renderResults(recipes, title = 'Generated Recipes') {
         if (!recipes || recipes.length === 0) {
-            resultsWrapper.innerHTML = `<div class="card empty-state"><p>No matching recipes found. Try different ingredients!</p></div>`;
+            resultsWrapper.innerHTML = `<div class="card empty-state"><p>No matching recipes found. Try different ingredients or filters!</p></div>`;
             return;
         }
         const recipeCardsHTML = recipes.map(r => {
@@ -97,22 +98,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (r.cuisine) metaItems.push(`<span>${r.cuisine}</span>`);
             if (r.difficulty) metaItems.push(`<span><b>Difficulty:</b> ${r.difficulty}</span>`);
             if (r.cook_time) metaItems.push(`<span><b>Cook Time:</b> ${r.cook_time} mins</span>`);
-
             const hasSubstitutions = r.substitutions && Object.keys(r.substitutions).length > 0;
             if (hasSubstitutions) {
                 metaItems.push(`<span class="substitution-badge">⚠️ Substitutes</span>`);
             }
-
             const subsData = hasSubstitutions ? JSON.stringify(r.substitutions) : '';
-
             return `
             <div class="recipe-card" data-recipe-name="${r.name}" data-substitutions='${subsData}'>
-                <img src="${r.image_url || 'https://placehold.co/150x150/1a1c1e/a0a0a0?text=No+Image'}" alt="${r.name}" class="recipe-card-image">
+                <img src="${r.image_url || 'https://via.placeholder.com/150'}" alt="${r.name}" class="recipe-card-image">
                 <div class="recipe-card-content">
                     <h3>${r.name}</h3>
-                    <div class="meta">
-                        ${metaItems.join(' <span class="text-muted">&bull;</span> ')}
-                    </div>
+                    <div class="meta">${metaItems.join(' <span class="text-muted">&bull;</span> ')}</div>
                 </div>
             </div>`;
         }).join("");
@@ -120,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderRecipeDetail(recipe, substitutions) {
-        originalRecipeData = { ...recipe }; // Store a copy of the original recipe data
+        originalRecipeData = { ...recipe };
 
         const servingsHTML = `
             <div class="servings-section">
@@ -130,8 +126,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span id="servings-display">${recipe.servings}</span>
                     <button id="increaseServings" type="button">+</button>
                 </div>
-            </div>
-        `;
+            </div>`;
+
+        const ratingHTML = `
+            <div class="rating-section">
+                <h3>Rate this Recipe</h3>
+                <div class="star-rating" data-recipe-name="${recipe.name}">
+                    <span class="star" data-value="5">&#9733;</span>
+                    <span class="star" data-value="4">&#9733;</span>
+                    <span class="star" data-value="3">&#9733;</span>
+                    <span class="star" data-value="2">&#9733;</span>
+                    <span class="star" data-value="1">&#9733;</span>
+                </div>
+                <div class="rating-summary" id="ratingSummary">Loading rating...</div>
+            </div>`;
 
         const ingredientsHTML = Object.entries(recipe.ingredients).map(([name, amount]) => {
             const formattedName = name.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -142,30 +150,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     subNote = ` <span class="substitution-note">(for ${formattedOriginal})</span>`;
                 }
             }
-            // Add data attribute for original amount
-            return `<li data-original-amount="${amount}">${formattedName}${subNote} <span>${amount}g</span></li>`;
+            return `<li data-original-amount="${amount}">${formattedName}${subNote} <span>${Math.round(amount)}g</span></li>`;
         }).join('');
 
-        const metaHTML = `
-            <div class="recipe-detail-meta">
-                <span>${recipe.cuisine}</span> &bull; <span>${recipe.difficulty}</span> &bull; <span>${recipe.cook_time} mins</span>
-            </div>
-        `;
+        const recipeIngredients = Object.keys(recipe.ingredients);
+        const missingIngredients = recipeIngredients.filter(ing => !currentUserIngredients.has(ing) && !Object.values(substitutions).includes(ing));
+        let missingIngredientsHTML = '';
+        if (missingIngredients.length > 0) {
+            const missingList = missingIngredients.map(ingName => {
+                const amount = recipe.ingredients[ingName];
+                const formattedName = ingName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                return `<li>${formattedName} <span>${Math.round(amount)}g</span></li>`;
+            }).join('');
+            missingIngredientsHTML = `
+                <div class="missing-ingredients-section">
+                    <h3>You Will Also Need</h3>
+                    <ul class="ingredients-list">${missingList}</ul>
+                </div>`;
+        }
+
+        const nutritionHTML = recipe.nutrition ? Object.entries(recipe.nutrition).map(([key, value]) => {
+            const unit = key.toLowerCase() === 'calories' ? '' : 'g';
+            const formattedKey = key.charAt(0).toUpperCase() + key.slice(1);
+            return `<li><strong>${formattedKey}</strong> ${value}${unit}</li>`;
+        }).join('') : '<li>Not available</li>';
 
         const stepsHTML = recipe.steps.map(step => `<li>${step}</li>`).join('');
 
         detailView.innerHTML = `
             <button class="close-detail-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="24"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg></button>
             <div class="card">
-                 <header class="recipe-detail-header">
-                     <h2>${recipe.name}</h2>
-                     ${metaHTML}
-                 </header>
-                 <img src="${recipe.image_url || 'https://placehold.co/800x400/0F1012/FFFFFF?text=No+Image'}" alt="${recipe.name}" class="recipe-detail-image">
-                 ${servingsHTML} 
+                 <header class="recipe-detail-header"><h2>${recipe.name}</h2></header>
+                 <img src="${recipe.image_url || 'https://via.placeholder.com/800x400'}" alt="${recipe.name}" class="recipe-detail-image">
+                 ${servingsHTML}
+                 ${ratingHTML}
                  <div class="ingredients-section">
                      <h3>Ingredients</h3>
                      <ul class="ingredients-list">${ingredientsHTML}</ul>
+                 </div>
+                 ${missingIngredientsHTML}
+                 <div class="nutrition-section">
+                     <h3>Nutrition</h3>
+                     <ul class="nutrition-list">${nutritionHTML}</ul>
                  </div>
                  <div class="steps-section">
                      <h3>Instructions</h3>
@@ -179,13 +205,98 @@ document.addEventListener('DOMContentLoaded', () => {
         detailView.querySelector('.close-detail-btn').addEventListener('click', showListView);
         document.getElementById('decreaseServings').addEventListener('click', () => updateServings(-1));
         document.getElementById('increaseServings').addEventListener('click', () => updateServings(1));
+
+        fetchAndDisplayRatings(recipe.name);
+        detailView.querySelector('.star-rating').addEventListener('click', handleStarClick);
     }
 
-    // --- HELPER & FETCH FUNCTIONS ---
-    function updateActiveNav(activeButton) {
-        document.querySelectorAll('.header-nav .nav-link').forEach(link => {
-            link.classList.remove('active');
+    // --- FEATURE LOGIC ---
+    function updateServings(change) {
+        const display = document.getElementById('servings-display');
+        let currentServings = parseInt(display.textContent);
+        const newServings = Math.max(1, currentServings + change);
+
+        if (newServings === currentServings) return;
+        display.textContent = newServings;
+
+        const originalServings = originalRecipeData.servings;
+        const ingredientsList = detailView.querySelector('.ingredients-list');
+
+        ingredientsList.querySelectorAll('li').forEach(li => {
+            const originalAmount = parseFloat(li.dataset.originalAmount);
+            const amountPerServing = originalAmount / originalServings;
+            const newAmount = Math.round(amountPerServing * newServings);
+            li.querySelector('span').textContent = `${newAmount}g`;
         });
+    }
+
+    async function fetchAndDisplayRatings(recipeName) {
+        try {
+            const res = await fetchWithAuth(`/recipe/${recipeName}/ratings`);
+            if (!res.ok) throw new Error('Could not load ratings');
+            const data = await res.json();
+
+            const summaryEl = document.getElementById('ratingSummary');
+            if (data.rating_count > 0) {
+                summaryEl.textContent = `Average: ${data.average_rating.toFixed(1)} / 5 (from ${data.rating_count} ratings)`;
+            } else {
+                summaryEl.textContent = 'Be the first to rate this recipe!';
+            }
+            updateStarDisplay(data.user_rating);
+        } catch (error) {
+            document.getElementById('ratingSummary').textContent = 'Could not load rating.';
+        }
+    }
+
+    async function handleStarClick(event) {
+        if (!event.target.classList.contains('star')) return;
+
+        const rating = parseInt(event.target.dataset.value);
+        const recipeName = event.currentTarget.dataset.recipeName;
+
+        updateStarDisplay(rating);
+
+        try {
+            await fetchWithAuth('/rate', {
+                method: 'POST',
+                body: JSON.stringify({ recipe_name: recipeName, rating: rating }),
+            });
+            showToast('Your rating has been saved!', 'success');
+            fetchAndDisplayRatings(recipeName);
+        } catch (error) {
+            showToast('Failed to save your rating.', 'error');
+        }
+    }
+
+    function updateStarDisplay(rating) {
+        const stars = detailView.querySelectorAll('.star-rating .star');
+        stars.forEach(star => {
+            star.classList.toggle('selected', parseInt(star.dataset.value) <= rating);
+        });
+    }
+
+    // --- DATA FETCHING & NAVIGATION ---
+    async function fetchAndShowSuggestions() {
+        updateActiveNav(suggestionsBtn);
+        resultsWrapper.innerHTML = `<div class="card"><div class="spinner" style="display:block; margin: 80px auto; width: 40px; height: 40px;"></div></div>`;
+        showListView();
+        try {
+            const res = await fetchWithAuth('/suggestions');
+            if (!res.ok) throw new Error('Could not get suggestions.');
+            const data = await res.json();
+            if (data.recipes.length === 0) {
+                resultsWrapper.innerHTML = `<div class="card empty-state"><p>Rate more recipes with 3+ stars to get personalized suggestions!</p></div>`;
+            } else {
+                renderResults(data.recipes, 'Suggested For You');
+            }
+        } catch (error) {
+            showToast(error.message, 'error');
+            resultsWrapper.innerHTML = '';
+        }
+    }
+
+    function updateActiveNav(activeButton) {
+        [homeBtn, discoverBtn, suggestionsBtn, favoritesBtn].forEach(btn => btn?.classList.remove('active'));
         if (activeButton) {
             activeButton.classList.add('active');
         }
@@ -221,33 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateServings(change) {
-        const display = document.getElementById('servings-display');
-        let currentServings = parseInt(display.textContent);
-        const newServings = Math.max(1, currentServings + change);
-
-        if (newServings === currentServings) return;
-        display.textContent = newServings;
-
-        const originalServings = originalRecipeData.servings;
-        const ingredientsList = detailView.querySelector('.ingredients-list');
-
-        ingredientsList.querySelectorAll('li').forEach(li => {
-            const originalAmount = parseFloat(li.dataset.originalAmount);
-            const amountPerServing = originalAmount / originalServings;
-            const newAmount = Math.round(amountPerServing * newServings);
-            li.querySelector('span').textContent = `${newAmount}g`;
-        });
-    }
-
     async function fetchAndShowRecipeDetails(recipeName, clickedCard) {
         document.querySelectorAll('.recipe-card.selected').forEach(card => card.classList.remove('selected'));
-        if (clickedCard) {
-            clickedCard.classList.add('selected');
-        }
-
+        if (clickedCard) clickedCard.classList.add('selected');
         const substitutions = JSON.parse(clickedCard.dataset.substitutions || '{}');
-
         showDetailView();
         detailView.innerHTML = `<div class="card"><div class="spinner" style="display:block; margin: 80px auto; width: 40px; height: 40px;"></div></div>`;
         try {
@@ -267,10 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.innerHTML = `
             <input class="ingredient-input" list="ingredient-datalist" placeholder="Type or select an ingredient..." value="${ingredientValue}">
             <input type="number" class="quantity-input" placeholder="Quantity (g)" min="1">
-            <button type="button" class="remove-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-1.15.048-2.26.11-3.35.19-1.2.09-1.9.99-1.9 2.18v.28c0 .28.22.5.5.5h17a.5.5 0 0 0 .5-.5v-.28c0-1.19-.7-2.09-1.9-2.18-.36-.03-.72-.05-1.08-.07a.75.75 0 0 0-.74.65c-.03.21-.06.41-.1.62h-4.3c-.04-.21-.07-.41-.1-.62a.75.75 0 0 0-.74-.65c-.36.02-.72.04-1.08.07-1.09.08-2.19.14-3.35.19V3.75A2.75 2.75 0 0 0 8.75 1ZM4.25 8.5V16a1.5 1.5 0 0 0 1.5 1.5h8.5a1.5 1.5 0 0 0 1.5-1.5V8.5h-11.5Z" clip-rule="evenodd" /></svg>
-            </button>
-        `;
+            <button type="button" class="remove-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-1.15.048-2.26.11-3.35.19-1.2.09-1.9.99-1.9 2.18v.28c0 .28.22.5.5.5h17a.5.5 0 0 0 .5-.5v-.28c0-1.19-.7-2.09-1.9-2.18-.36-.03-.72-.05-1.08-.07a.75.75 0 0 0-.74.65c-.03.21-.06.41-.1.62h-4.3c-.04-.21-.07-.41-.1-.62a.75.75 0 0 0-.74-.65c-.36.02-.72.04-1.08.07-1.09.08-2.19.14-3.35.19V3.75A2.75 2.75 0 0 0 8.75 1ZM4.25 8.5V16a1.5 1.5 0 0 0 1.5 1.5h8.5a1.5 1.5 0 0 0 1.5-1.5V8.5h-11.5Z" clip-rule="evenodd" /></svg></button>`;
         ingredientList.appendChild(row);
         row.querySelector(".remove-btn").addEventListener("click", () => row.remove());
     }
@@ -293,31 +378,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.addEventListener('click', () => {
-        if (profileDropdownMenu && profileDropdownMenu.classList.contains('show')) {
+        if (profileDropdownMenu?.classList.contains('show')) {
             profileDropdownMenu.classList.remove('show');
         }
     });
 
-    if (homeBtn) {
-        homeBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.location.reload();
-        });
-    }
-
-    if (discoverBtn) {
-        discoverBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            fetchAndShowAllRecipes();
-        });
-    }
-
-    if (favoritesBtn) {
-        favoritesBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            fetchAndShowFavorites();
-        });
-    }
+    [homeBtn, discoverBtn, suggestionsBtn, favoritesBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const id = e.currentTarget.id;
+                if (id === 'homeBtn') window.location.reload();
+                if (id === 'discoverBtn') fetchAndShowAllRecipes();
+                if (id === 'suggestionsBtn') fetchAndShowSuggestions();
+                if (id === 'favoritesBtn') fetchAndShowFavorites();
+            });
+        }
+    });
 
     detailView.addEventListener('click', async (e) => {
         if (e.target.classList.contains('fav-btn')) {
@@ -330,9 +407,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     body: JSON.stringify({ recipe_name: recipeName })
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.message);
-
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.message);
+                }
                 showToast('Recipe added to favorites!', 'success');
                 button.textContent = 'Favorited!';
             } catch (error) {
@@ -347,31 +425,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ingredientForm.addEventListener("submit", async (e) => {
         e.preventDefault();
+        updateActiveNav(homeBtn);
         toggleButtonLoading(generateBtn, true);
 
-        // 1. Get filter values
         const dietary = dietaryFilter.value;
         const difficulty = difficultyFilter.value;
         const maxTime = timeFilter.value;
 
-        // 2. Build the query string for the API call
         const params = new URLSearchParams();
         if (dietary !== 'all') params.append('dietary', dietary);
         if (difficulty !== 'all') params.append('difficulty', difficulty);
         if (maxTime) params.append('max_time', maxTime);
-
         const queryString = params.toString() ? `?${params.toString()}` : '';
 
-        // 3. Get ingredients (existing logic)
         const ingredients = {};
         const addedIngredients = new Set();
         let hasError = false;
+
         document.querySelectorAll(".ingredient-row").forEach(row => {
             if (hasError) return;
             const input = row.querySelector(".ingredient-input");
             const ing = input.value.trim().toLowerCase();
-            const qty = parseFloat(row.querySelector(".quantity-input").value);
-
             if (ing) {
                 if (!allIngredients.map(i => i.toLowerCase()).includes(ing)) {
                     showToast(`'${input.value}' is not a valid ingredient.`, "error");
@@ -381,24 +455,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast(`'${input.value}' has been added more than once.`, "error");
                     hasError = true; return;
                 }
-                ingredients[ing] = qty || 1;
+                ingredients[ing] = 1;
                 addedIngredients.add(ing);
             }
         });
 
-        if (hasError) { toggleButtonLoading(generateBtn, false); return; }
-        if (Object.keys(ingredients).length === 0) {
-            showToast("Please add at least one ingredient.", "error");
-            toggleButtonLoading(generateBtn, false); return;
+        if (hasError || Object.keys(ingredients).length === 0) {
+            if (!hasError) showToast("Please add at least one ingredient.", "error");
+            toggleButtonLoading(generateBtn, false);
+            return;
         }
-
         currentUserIngredients = new Set(Object.keys(ingredients));
-
         try {
-            // 4. Make the API call with the filters in the query string
             const res = await fetchWithAuth(`/generate${queryString}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ingredients }),
             });
             if (!res.ok) throw new Error('Failed to get recipes');
@@ -444,8 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addRecognizedIngredient(ingredientName) {
-        const existingInputs = document.querySelectorAll('.ingredient-input');
-        const isAlreadyAdded = Array.from(existingInputs).some(input => input.value.toLowerCase() === ingredientName);
+        const isAlreadyAdded = Array.from(document.querySelectorAll('.ingredient-input')).some(input => input.value.toLowerCase() === ingredientName);
         if (!isAlreadyAdded) {
             const displayName = ingredientName.charAt(0).toUpperCase() + ingredientName.slice(1);
             addIngredientRow(displayName);
@@ -480,14 +549,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isLoading) {
             button.disabled = true;
             if (spinner) spinner.style.display = 'block';
-            if (text) text.style.display = 'none';
+            if (text) text.style.display = 'inline';
         } else {
             button.disabled = false;
             if (spinner) spinner.style.display = 'none';
             if (text) text.style.display = 'inline';
         }
     }
-
     initializeApp();
 });
 

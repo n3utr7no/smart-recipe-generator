@@ -730,3 +730,119 @@ a.btn-secondary {
     padding-left: 4px;
     /* Small indent for alignment */
 }
+
+/* --- NEW STYLES FOR FILTERS, SERVINGS, AND RATINGS --- */
+
+/* Filter Section Styles */
+#filterSection h2 {
+    margin-bottom: 20px;
+}
+
+.filter-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    align-items: end;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filter-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding-left: 4px;
+}
+
+/* Serving Size Adjuster Styles */
+.servings-section {
+    margin-top: 24px;
+    padding: 16px;
+    background-color: rgba(0, 166, 147, 0.05);
+    border: 1px solid var(--accent-primary-glow);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.servings-adjuster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.servings-adjuster button {
+    background: #2D2F31;
+    color: var(--text-primary);
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+    padding: 0;
+    border-radius: 50%;
+}
+
+#servings-display {
+    font-size: 1.5rem;
+    font-weight: 600;
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Star Rating Section Styles */
+.rating-section {
+    margin-top: 24px;
+    padding: 24px;
+    background-color: var(--panel-color);
+    border-top: 1px solid var(--panel-stroke);
+    border-bottom: 1px solid var(--panel-stroke);
+    text-align: center;
+}
+
+.rating-section h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.star-rating {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    /* This is key for the hover effect */
+    justify-content: center;
+    gap: 4px;
+}
+
+.star-rating .star {
+    font-size: 2.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s ease-out;
+}
+
+/* The hover effect: colors all stars to the left of the hovered one */
+.star-rating:hover .star {
+    color: var(--accent-primary);
+}
+
+.star-rating .star:hover~.star {
+    color: var(--accent-primary);
+}
+
+/* Style for stars that are 'selected' */
+.star-rating .star.selected {
+    color: var(--accent-primary);
+}
+
+.rating-summary {
+    margin-top: 12px;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}

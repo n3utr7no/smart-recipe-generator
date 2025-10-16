@@ -1,12 +1,12 @@
 from flask import Blueprint, request, jsonify
 from .utils import token_required
-from .models import all_ingredients, recipe_store, SUBSTITUTION_MAP, FavoriteRecipe, UserProfile, db
+from .models import all_ingredients, recipe_store, SUBSTITUTION_MAP, FavoriteRecipe, UserProfile, db, RecipeRating
+from sqlalchemy import func
 import math
-from clarifai.client.model import Model
-import os
 
 recipes_bp = Blueprint('recipes', __name__)
 
+# ... (all other routes and functions are unchanged) ...
 def calculate_match_score(recipe_ingredients, user_ingredients):
     perfect_matches = 0
     substitution_matches = 0
@@ -25,7 +25,7 @@ def calculate_match_score(recipe_ingredients, user_ingredients):
                     made_substitutions[required_ing] = sub
                     break
             
-    if not recipe_ingredients:
+    if len(recipe_ingredients) == 0:
         return 0, {}
         
     score = (perfect_matches + (substitution_matches * 0.7)) / len(recipe_ingredients)
@@ -50,6 +50,7 @@ def recognize_ingredients(current_user):
         if not CLARIFAI_PAT or CLARIFAI_PAT == "YOUR_VERIFIED_PERSONAL_ACCESS_TOKEN":
             return jsonify({'message': 'Server configuration error: PAT not set.'}), 500
 
+        from clarifai.client.model import Model
         model = Model("https://clarifai.com/clarifai/main/models/food-item-recognition", pat=CLARIFAI_PAT)
         response = model.predict_by_bytes(image_bytes, input_type="image")
         
@@ -64,7 +65,6 @@ def recognize_ingredients(current_user):
             return jsonify({'message': 'Could not recognize any known ingredients.'}), 404
 
         return jsonify({"recognized_ingredients": final_ingredients})
-
     except Exception as e:
         print(f"Clarifai Error: {e}")
         return jsonify({'message': 'Image recognition failed.'}), 500
@@ -77,15 +77,12 @@ def get_ingredients(current_user):
 @recipes_bp.route("/generate", methods=["POST"])
 @token_required
 def generate(current_user):
-    # Get filters from the request's query parameters
     dietary_filter = request.args.get('dietary', 'all')
     difficulty_filter = request.args.get('difficulty', 'all')
     max_time_filter = request.args.get('max_time', type=int)
 
-    # 1. Start with a list of all recipes
     filtered_recipes = list(recipe_store.values())
 
-    # 2. Apply each filter sequentially
     if dietary_filter != 'all':
         filtered_recipes = [r for r in filtered_recipes if dietary_filter in r.tags]
     
@@ -95,7 +92,6 @@ def generate(current_user):
     if max_time_filter:
         filtered_recipes = [r for r in filtered_recipes if r.cook_time <= max_time_filter]
 
-    # 3. Perform ingredient matching on the now-filtered list of recipes
     data = request.json
     ingredients_from_user = data.get("ingredients", {}).keys()
     
@@ -107,7 +103,6 @@ def generate(current_user):
             
     scores.sort(key=lambda x: x[1], reverse=True)
     
-    # 4. Format the results for the frontend
     results = []
     for r_name, score, subs in scores[:10]:
         rec = recipe_store[r_name]
@@ -147,7 +142,8 @@ def add_favorite(current_user):
     if not recipe_name or recipe_name not in recipe_store:
         return jsonify({'message': 'Invalid recipe name supplied'}), 400
 
-    if FavoriteRecipe.query.filter_by(user_id=current_user.id, recipe_name=recipe_name).first():
+    existing_fav = FavoriteRecipe.query.filter_by(user_id=current_user.id, recipe_name=recipe_name).first()
+    if existing_fav:
         return jsonify({'message': 'Recipe is already in your favorites'}), 409
 
     new_favorite = FavoriteRecipe(user_id=current_user.id, recipe_name=recipe_name)
@@ -183,6 +179,104 @@ def get_recipe_details(current_user, recipe_name):
     recipe = recipe_store.get(recipe_name)
     if not recipe:
         return jsonify({"message": "Recipe not found"}), 404
-    # vars() automatically converts all of the recipe's attributes (including new ones) to a dictionary
     return jsonify(vars(recipe))
 
+@recipes_bp.route("/rate", methods=["POST"])
+@token_required
+def rate_recipe(current_user):
+    data = request.get_json()
+    recipe_name = data.get('recipe_name')
+    rating = data.get('rating')
+
+    if not all([recipe_name, rating]) or recipe_name not in recipe_store:
+        return jsonify({'message': 'Invalid data provided'}), 400
+    
+    existing_rating = RecipeRating.query.filter_by(user_id=current_user.id, recipe_name=recipe_name).first()
+    if existing_rating:
+        existing_rating.rating = rating
+    else:
+        new_rating = RecipeRating(user_id=current_user.id, recipe_name=recipe_name, rating=rating)
+        db.session.add(new_rating)
+    
+    db.session.commit()
+    return jsonify({'message': 'Rating saved successfully'}), 200
+
+@recipes_bp.route("/recipe/<recipe_name>/ratings", methods=["GET"])
+@token_required
+def get_recipe_ratings(current_user, recipe_name):
+    if recipe_name not in recipe_store:
+        return jsonify({"message": "Recipe not found"}), 404
+
+    avg_rating, rating_count = db.session.query(
+        func.avg(RecipeRating.rating), func.count(RecipeRating.id)
+    ).filter(RecipeRating.recipe_name == recipe_name).first()
+    
+    user_rating_obj = RecipeRating.query.filter_by(user_id=current_user.id, recipe_name=recipe_name).first()
+    user_rating = user_rating_obj.rating if user_rating_obj else 0
+
+    return jsonify({
+        "average_rating": float(avg_rating) if avg_rating else 0,
+        "rating_count": rating_count if rating_count else 0,
+        "user_rating": user_rating
+    })
+
+@recipes_bp.route("/suggestions", methods=["GET"])
+@token_required
+def get_suggestions(current_user):
+    # --- Simple Collaborative Filtering Logic ---
+    user_high_ratings = {r.recipe_name for r in RecipeRating.query.filter(
+        RecipeRating.user_id == current_user.id, RecipeRating.rating >= 3
+    ).all()}
+
+    suggestions = []
+
+    def get_top_rated_fallback():
+        # UPDATED FALLBACK: Suggest the absolute top-rated recipes on the platform,
+        # sorted by average rating then by number of ratings.
+        top_recipes = db.session.query(
+            RecipeRating.recipe_name
+        ).group_by(RecipeRating.recipe_name).order_by(
+            func.avg(RecipeRating.rating).desc(), func.count(RecipeRating.id).desc()
+        ).limit(5).all()
+        return [r.recipe_name for r in top_recipes]
+
+    if not user_high_ratings:
+        suggestions = get_top_rated_fallback()
+    else:
+        similar_users = db.session.query(RecipeRating.user_id).filter(
+            RecipeRating.recipe_name.in_(user_high_ratings),
+            RecipeRating.user_id != current_user.id,
+            RecipeRating.rating >= 3
+        ).distinct().limit(50).all()
+        
+        similar_user_ids = [u.user_id for u in similar_users]
+
+        if similar_user_ids:
+            recommended_recipes = db.session.query(
+                RecipeRating.recipe_name
+            ).filter(
+                RecipeRating.user_id.in_(similar_user_ids),
+                RecipeRating.rating >= 3,
+                ~RecipeRating.recipe_name.in_(user_high_ratings)
+            ).group_by(RecipeRating.recipe_name).order_by(func.count(RecipeRating.user_id).desc()).limit(5).all()
+            
+            suggestions = [r.recipe_name for r in recommended_recipes]
+
+        if not suggestions:
+            suggestions = get_top_rated_fallback()
+
+    # Format the suggestions for the frontend
+    results = []
+    for name in suggestions:
+        rec = recipe_store.get(name)
+        if rec:
+            results.append({
+                "name": rec.name,
+                "difficulty": rec.difficulty,
+                "cook_time": rec.cook_time,
+                "cuisine": rec.cuisine,
+                "image_url": rec.image_url,
+                "substitutions": {}
+            })
+    
+    return jsonify({"recipes": results})

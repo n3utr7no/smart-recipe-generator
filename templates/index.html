@@ -3,13 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Culinary AI | Smart Recipe Generator</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
     <div id="toastContainer"></div>
-
     <header class="app-header">
         <div class="header-content">
             <div class="header-left">
@@ -22,6 +22,7 @@
             <nav class="header-nav">
                 <a href="#" class="nav-link active" id="homeBtn">Home</a>
                 <a href="#" class="nav-link" id="discoverBtn">Discover</a>
+                <a href="#" class="nav-link" id="suggestionsBtn">Suggestions</a>
                 <a href="#" class="nav-link" id="favoritesBtn">Favorites</a>
             </nav>
             <div class="header-right">
@@ -45,9 +46,7 @@
         </div>
     </header>
 
-    <!-- Master-Detail Container -->
     <div id="masterDetailContainer">
-        <!-- Master Panel (Scrollable List) -->
         <main id="listView" class="container">
             <section class="card" id="filterSection">
                 <h2>Recipe Filters</h2>
@@ -80,6 +79,7 @@
                     </div>
                 </div>
             </section>
+
             <section class="card">
                 <h2>Your Ingredients</h2>
                 <div id="image-upload-area">
@@ -91,7 +91,6 @@
                 <form id="ingredientForm">
                     <datalist id="ingredient-datalist"></datalist>
                     <div id="ingredientList">
-                        <!-- Ingredient rows will be added here by JavaScript -->
                     </div>
                     <div class="form-actions">
                         <button type="button" id="addIngredient" class="btn-secondary">Add Ingredient</button>
@@ -102,7 +101,6 @@
             <div id="resultsWrapper"></div>
         </main>
 
-        <!-- Detail Panel (Side Panel) -->
         <aside id="detailView"></aside>
     </div>
 
