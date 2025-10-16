@@ -1,6 +1,6 @@
 # app/__init__.py
 from flask import Flask, render_template, redirect, url_for
-# from flask_cors import CORS
+from flask_cors import CORS
 from .extensions import bcrypt
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -13,7 +13,7 @@ def create_app():
     project_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///" + os.path.join(project_dir, "database.db")
 
-    # CORS(app)
+    CORS(app)
     bcrypt.init_app(app)
 
     db.init_app(app)
